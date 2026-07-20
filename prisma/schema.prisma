@@ -1,0 +1,290 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model AppConfig {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @updatedAt
+}
+
+model Institution {
+  id                      String   @id
+  name                    String
+  email                   String
+  logoUrl                 String?
+  phone                   String?
+  address                 String?
+  contactName             String?
+  walletBalance           Int      @default(0)
+  lowBalanceThreshold     Int      @default(200)
+  apiKeyHash              String
+  apiKeyPrefix            String
+  apiKeyCreatedAt         DateTime @default(now())
+  apiKeyCiphertext        String?
+  apiKeyLastUsedAt        DateTime?
+  notificationPreferences Json
+  settlementBank          Json?
+
+  users            User[]
+  verifications    Verification[]
+  reports          Report[]
+  walletTxns       WalletTransaction[]
+  webhooks         WebhookEndpoint[]
+  fundSessions     FundSession[]
+  notifications    Notification[]
+  earnings         EarningRecord[]
+  earningsWithdrawals EarningsWithdrawalRequest[]
+  platformCustomers PlatformCustomer[]
+  teamInvites      TeamInvite[]
+  loginSessions    LoginSession[]
+  otpRequests      OtpRequest[]
+  idempotencyKeys  IdempotencyKey[]
+}
+
+model User {
+  id              String   @id
+  institutionId   String
+  institution     Institution @relation(fields: [institutionId], references: [id], onDelete: Cascade)
+  email           String   @unique
+  name            String
+  role            String
+  passwordHash    String
+  isPlatformAdmin Boolean  @default(false)
+  loginSessions   LoginSession[]
+}
+
+model Verification {
+  id                     String   @id
+  institutionId          String
+  institution            Institution @relation(fields: [institutionId], references: [id], onDelete: Cascade)
+  reference              String
+  identifierType         String
+  maskedIdentifier       String
+  result                 String
+  confidence             Json?
+  independentSourceCount Int
+  totalReports           Int?
+  categories             Json?
+  firstReportedAt        DateTime?
+  mostRecentReportAt     DateTime?
+  amountCharged          Int
+  createdAt              DateTime @default(now())
+
+  @@index([institutionId, createdAt])
+  @@unique([institutionId, reference])
+}
+
+model Report {
+  id                     String   @id
+  institutionId          String
+  institution            Institution @relation(fields: [institutionId], references: [id], onDelete: Cascade)
+  reference              String
+  identifierType         String
+  maskedIdentifier       String
+  maskedEmail            String?
+  maskedPhone            String?
+  maskedAccountNumber    String?
+  fullName               String?
+  bank                   String?
+  category               String
+  description            String
+  incidentDate           String
+  amountInvolved         Int?
+  independentSourceCount Int
+  confidence             Json
+  earningsGenerated      Int      @default(0)
+  submittedAt            DateTime @default(now())
+  signalKey              String
+
+  @@index([institutionId, submittedAt])
+  @@index([signalKey])
+  @@unique([institutionId, reference])
+}
+
+model WalletTransaction {
+  id            String   @id
+  institutionId String
+  institution   Institution @relation(fields: [institutionId], references: [id], onDelete: Cascade)
+  type          String
+  amount        Int
+  balanceAfter  Int
+  description   String
+  reference     String
+  createdAt     DateTime @default(now())
+
+  @@index([institutionId, createdAt])
+}
+
+model WebhookEndpoint {
+  id                 String   @id
+  institutionId      String
+  institution        Institution @relation(fields: [institutionId], references: [id], onDelete: Cascade)
+  url                String
+  events             Json
+  secret             String
+  secretPreview      String
+  enabled            Boolean  @default(true)
+  lastDeliveryAt     DateTime?
+  lastDeliveryStatus String?
+}
+
+model FundSession {
+  id                   String   @id
+  institutionId        String
+  institution          Institution @relation(fields: [institutionId], references: [id], onDelete: Cascade)
+  reference            String
+  amount               Int
+  creditAmount         Int
+  fee                  Int
+  bankName             String
+  accountNumber        String
+  accountName          String
+  expiresAt            DateTime
+  status               String
+  provider             String
+  transactionReference String?
+  checkoutUrl          String?
+}
+
+model IdempotencyKey {
+  id            String   @id @default(cuid())
+  institutionId String
+  institution   Institution @relation(fields: [institutionId], references: [id], onDelete: Cascade)
+  key           String
+  resourceType  String
+  resourceId    String
+  createdAt     DateTime @default(now())
+
+  @@unique([institutionId, resourceType, key])
+}
+
+model MonnifyWebhookReceipt {
+  id         String   @id
+  dedupeKey  String   @unique
+  eventType  String
+  createdAt  DateTime @default(now())
+}
+
+model Notification {
+  id            String   @id
+  institutionId String
+  institution   Institution @relation(fields: [institutionId], references: [id], onDelete: Cascade)
+  title         String
+  message       String
+  read          Boolean  @default(false)
+  createdAt     DateTime @default(now())
+
+  @@index([institutionId, createdAt])
+}
+
+model EarningRecord {
+  id               String   @id
+  institutionId    String
+  institution      Institution @relation(fields: [institutionId], references: [id], onDelete: Cascade)
+  maskedIdentifier String
+  reportReference  String
+  amount           Int
+  status           String
+  payoutReference  String?
+  createdAt        DateTime @default(now())
+
+  @@index([institutionId, createdAt])
+  @@index([institutionId, payoutReference])
+}
+
+model EarningsWithdrawalRequest {
+  id              String    @id
+  institutionId   String
+  institution     Institution @relation(fields: [institutionId], references: [id], onDelete: Cascade)
+  reference       String    @unique
+  amount          Int
+  status          String
+  processAfterAt  DateTime?
+  monnifyStatus   String?
+  failureReason   String?
+  reviewedAt      DateTime?
+  reviewedByEmail String?
+  rejectionReason String?
+  createdAt       DateTime  @default(now())
+  processedAt     DateTime?
+
+  @@index([status, processAfterAt])
+  @@index([institutionId, createdAt])
+}
+
+model PlatformCustomer {
+  id               String   @id
+  institutionId    String
+  institution      Institution @relation(fields: [institutionId], references: [id], onDelete: Cascade)
+  customerId       String
+  displayName      String
+  matchedField     String
+  maskedIdentifier String
+  signalKey        String
+  onboardedAt      DateTime @default(now())
+  status           String
+
+  @@index([institutionId, signalKey])
+}
+
+model TeamInvite {
+  id            String   @id
+  institutionId String
+  institution   Institution @relation(fields: [institutionId], references: [id], onDelete: Cascade)
+  name          String
+  email         String
+  role          String
+  status        String
+  invitedAt     DateTime @default(now())
+  tokenHash     String?  @unique
+  expiresAt     DateTime?
+}
+
+model LoginSession {
+  id            String   @id
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  institutionId String
+  institution   Institution @relation(fields: [institutionId], references: [id], onDelete: Cascade)
+  device        String
+  location      String
+  ipAddress     String
+  lastActiveAt  DateTime @default(now())
+  current       Boolean  @default(false)
+  tokenId       String
+}
+
+model OtpRequest {
+  id            String   @id
+  institutionId String
+  institution   Institution @relation(fields: [institutionId], references: [id], onDelete: Cascade)
+  userId        String
+  code          String
+  expiresAt     DateTime
+  purpose       String
+}
+
+model AccessRequest {
+  id                    String    @id
+  companyName           String
+  email                 String
+  cacNumber             String
+  passwordHash          String
+  status                String    @default("pending")
+  createdAt             DateTime  @default(now())
+  reviewedAt            DateTime?
+  reviewedByEmail       String?
+  rejectionReason       String?
+  institutionId         String?
+  onboardingTokenHash   String?   @unique
+  onboardingExpiresAt   DateTime?
+
+  @@index([email])
+  @@index([status, createdAt])
+}
