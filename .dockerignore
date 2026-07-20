@@ -1,0 +1,10 @@
+node_modules
+admin-ui/node_modules
+dist
+public/admin
+.env
+.env.*
+!.env.example
+.git
+coverage
+*.log

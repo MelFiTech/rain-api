@@ -6,10 +6,11 @@
   "private": true,
   "license": "UNLICENSED",
   "scripts": {
-    "build": "npm run admin:build && nest build",
-    "admin:install": "npm install --prefix admin-ui",
+    "build": "prisma generate && npm run admin:build && nest build",
+    "admin:install": "npm install --prefix admin-ui --include=dev",
     "admin:dev": "npm run dev --prefix admin-ui",
     "admin:build": "npm run build --prefix admin-ui",
+    "postinstall": "npm run admin:install",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "start": "nest start",
     "start:dev": "nest start --watch",

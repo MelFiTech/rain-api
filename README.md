@@ -1,6 +1,6 @@
 # Rain API
 
-NestJS backend for the Monnify hackathon demo. Serves the developer API, the institution dashboard API (`/platform`), and the built-in platform admin UI at `/admin`.
+NestJS backend for the Monnify hackathon demo. Serves the developer API (`/v1`) and the built-in Rain admin UI at `/admin`.
 
 ## Prerequisites
 
@@ -63,7 +63,7 @@ Platform admin (`/admin`):
 - Email: `admin@userain.co`
 - Password: `Password@123`
 
-PayNest (rain-web):
+PayNest:
 
 - Email: `compliance@paynest.ng`
 - Password: `password123`
@@ -78,8 +78,8 @@ Developer API key (PayNest):
 | Surface | Prefix | How to authenticate |
 |---------|--------|---------------------|
 | Developer API | `/v1/*` | Bearer API key |
-| Institution dashboard | `/platform/*` | JWT from `POST /platform/auth/login` |
-| Platform admin | `/platform/admin/*` | Same JWT; user must have `isPlatformAdmin` |
+| Institution app API | `/platform/*` | JWT from `POST /platform/auth/login` |
+| Rain admin API | `/platform/admin/*` | JWT; user must have `isPlatformAdmin` |
 | Health | `GET /health` | None |
 
 ## Useful scripts

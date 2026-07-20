@@ -38,7 +38,7 @@ async function bootstrap() {
   const swaggerConfig = new DocumentBuilder()
     .setTitle('Rain API')
     .setDescription(
-      'Rain platform API — JWT-authenticated dashboard routes under /platform, developer API under /v1.',
+      'Rain API — institution routes under /platform (external frontend), developer API under /v1, Rain admin under /platform/admin.',
     )
     .setVersion('1.0')
     .addBearerAuth(

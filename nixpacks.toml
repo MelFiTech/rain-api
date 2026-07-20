@@ -1,0 +1,17 @@
+[phases.setup]
+nixPkgs = ["nodejs_20"]
+
+[phases.install]
+cmds = [
+  "npm ci --include=dev",
+  "npm ci --prefix admin-ui --include=dev",
+]
+
+[phases.build]
+cmds = [
+  "npx prisma generate",
+  "npm run build",
+]
+
+[start]
+cmd = "node dist/main"
