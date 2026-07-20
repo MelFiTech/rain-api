@@ -47,6 +47,61 @@ const TABS = [
 
 type TabId = (typeof TABS)[number]["id"];
 
+function RequestApproveActions({
+  request,
+  actingId,
+  approvedIds,
+  onApprove,
+  onReject,
+  compact,
+}: {
+  request: AccessRequestRecord;
+  actingId: string | null;
+  approvedIds: ReadonlySet<string>;
+  onApprove: (id: string) => void;
+  onReject: (id: string) => void;
+  compact?: boolean;
+}) {
+  const approved =
+    request.status === "approved" || approvedIds.has(request.id);
+
+  if (request.status === "rejected") {
+    return null;
+  }
+
+  if (approved) {
+    return (
+      <Button size="sm" variant="secondary" disabled>
+        Approved
+      </Button>
+    );
+  }
+
+  if (request.status !== "pending") {
+    return null;
+  }
+
+  return (
+    <div className={cn("flex shrink-0", compact ? "gap-1 justify-end" : "gap-2")}>
+      <Button
+        size="sm"
+        loading={actingId === request.id}
+        onClick={() => onApprove(request.id)}
+      >
+        Approve
+      </Button>
+      <Button
+        size="sm"
+        variant="secondary"
+        disabled={actingId === request.id}
+        onClick={() => onReject(request.id)}
+      >
+        Reject
+      </Button>
+    </div>
+  );
+}
+
 type InstitutionsListCache = {
   institutions: InstitutionRow[];
   requests: AccessRequestRecord[];
@@ -147,12 +202,14 @@ function InstitutionsTablePanel({
 function RequestCards({
   rows,
   actingId,
+  approvedIds,
   onApprove,
   onReject,
   loading,
 }: {
   rows: AccessRequestRecord[];
   actingId: string | null;
+  approvedIds: ReadonlySet<string>;
   onApprove: (id: string) => void;
   onReject: (id: string) => void;
   loading: boolean;
@@ -212,25 +269,13 @@ function RequestCards({
                 </Link>
               )}
             </div>
-            {r.status === "pending" && (
-              <div className="flex gap-2 shrink-0">
-                <Button
-                  size="sm"
-                  loading={actingId === r.id}
-                  onClick={() => onApprove(r.id)}
-                >
-                  Approve
-                </Button>
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  disabled={actingId === r.id}
-                  onClick={() => onReject(r.id)}
-                >
-                  Reject
-                </Button>
-              </div>
-            )}
+            <RequestApproveActions
+              request={r}
+              actingId={actingId}
+              approvedIds={approvedIds}
+              onApprove={onApprove}
+              onReject={onReject}
+            />
           </Card>
         </li>
       ))}
@@ -244,6 +289,7 @@ function AllDirectoryTable({
   requests,
   loading,
   actingId,
+  approvedIds,
   onApprove,
   onReject,
 }: {
@@ -251,10 +297,13 @@ function AllDirectoryTable({
   requests: AccessRequestRecord[];
   loading: boolean;
   actingId: string | null;
+  approvedIds: ReadonlySet<string>;
   onApprove: (id: string) => void;
   onReject: (id: string) => void;
 }) {
-  const openRequests = requests.filter((r) => r.status !== "approved");
+  const openRequests = requests.filter(
+    (r) => r.status !== "approved" || approvedIds.has(r.id),
+  );
   const isEmpty = !loading && institutions.length === 0 && openRequests.length === 0;
 
   return (
@@ -356,32 +405,14 @@ function AllDirectoryTable({
                       {formatDateTime(r.createdAt)}
                     </td>
                     <td className="px-4 py-4">
-                      {r.status === "pending" ? (
-                        <div className="flex gap-1 justify-end">
-                          <Button
-                            size="sm"
-                            loading={actingId === r.id}
-                            onClick={() => onApprove(r.id)}
-                          >
-                            Approve
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="secondary"
-                            disabled={actingId === r.id}
-                            onClick={() => onReject(r.id)}
-                          >
-                            Reject
-                          </Button>
-                        </div>
-                      ) : r.institutionId ? (
-                        <Link
-                          to={`/institutions/${r.institutionId}`}
-                          className="text-xs text-primary hover:underline"
-                        >
-                          View
-                        </Link>
-                      ) : null}
+                      <RequestApproveActions
+                        request={r}
+                        actingId={actingId}
+                        approvedIds={approvedIds}
+                        onApprove={onApprove}
+                        onReject={onReject}
+                        compact
+                      />
                     </td>
                   </tr>
                 ))}
@@ -417,6 +448,7 @@ export function InstitutionsPage() {
   const [loading, setLoading] = useState(() => institutionsListCache === null);
   const [refreshing, setRefreshing] = useState(false);
   const [actingId, setActingId] = useState<string | null>(null);
+  const [approvedIds, setApprovedIds] = useState<Set<string>>(() => new Set());
   const [message, setMessage] = useState("");
 
   const load = useCallback(async (mode: "initial" | "refresh" | "silent" = "initial") => {
@@ -454,8 +486,17 @@ export function InstitutionsPage() {
       await apiPost(
         `/platform/admin/access-requests/${encodeURIComponent(id)}/approve`,
       );
+      setApprovedIds((prev) => new Set(prev).add(id));
+      setRequests((prev) =>
+        prev.map((r) => (r.id === id ? { ...r, status: "approved" } : r)),
+      );
       setMessage("Approved. Applicant can sign in with their chosen password.");
       await load("silent");
+      setApprovedIds((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
     } catch (e) {
       setMessage(e instanceof Error ? e.message : "Approve failed.");
     } finally {
@@ -542,6 +583,7 @@ export function InstitutionsPage() {
           requests={requests}
           loading={loading}
           actingId={actingId}
+          approvedIds={approvedIds}
           onApprove={approve}
           onReject={reject}
         />
@@ -552,6 +594,7 @@ export function InstitutionsPage() {
           <RequestCards
             rows={requests}
             actingId={actingId}
+            approvedIds={approvedIds}
             onApprove={approve}
             onReject={reject}
             loading={loading}

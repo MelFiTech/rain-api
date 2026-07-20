@@ -24,7 +24,7 @@ async function bootstrap() {
     rawBody: true,
   });
   app.enableCors({
-    origin: process.env.CORS_ORIGIN?.split(',') ?? true,
+    origin: true,
     credentials: true,
   });
   app.useGlobalPipes(

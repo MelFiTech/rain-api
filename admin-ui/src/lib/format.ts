@@ -12,8 +12,9 @@ export function formatDateTime(iso: string): string {
     day: "numeric",
     month: "short",
     year: "numeric",
-    hour: "2-digit",
+    hour: "numeric",
     minute: "2-digit",
+    hour12: true,
   }).format(new Date(iso));
 }
 

@@ -67,6 +67,7 @@ export function WithdrawalsPage() {
   const [loading, setLoading] = useState(() => withdrawalsListCache === null);
   const [refreshing, setRefreshing] = useState(false);
   const [actingId, setActingId] = useState<string | null>(null);
+  const [approvedIds, setApprovedIds] = useState<Set<string>>(() => new Set());
   const [message, setMessage] = useState("");
 
   const load = useCallback(async (mode: "initial" | "refresh" | "silent" = "initial") => {
@@ -148,10 +149,16 @@ export function WithdrawalsPage() {
       await apiPost(
         `/platform/admin/earnings-withdrawals/${encodeURIComponent(id)}/approve`,
       );
+      setApprovedIds((prev) => new Set(prev).add(id));
       setMessage(
         "Approved. Payout queued for Monnify within the configured window.",
       );
       await load("silent");
+      setApprovedIds((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
     } catch (e) {
       setMessage(e instanceof Error ? e.message : "Approve failed.");
     } finally {
@@ -313,25 +320,33 @@ export function WithdrawalsPage() {
                     </p>
                   )}
                 </div>
-                {r.status === "pending_approval" && (
+                {r.status === "pending_approval" || approvedIds.has(r.id) ? (
                   <div className="flex gap-2 shrink-0">
-                    <Button
-                      size="sm"
-                      loading={actingId === r.id}
-                      onClick={() => approve(r.id)}
-                    >
-                      Approve
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      disabled={actingId === r.id}
-                      onClick={() => reject(r.id)}
-                    >
-                      Reject
-                    </Button>
+                    {approvedIds.has(r.id) || r.status !== "pending_approval" ? (
+                      <Button size="sm" variant="secondary" disabled>
+                        Approved
+                      </Button>
+                    ) : (
+                      <>
+                        <Button
+                          size="sm"
+                          loading={actingId === r.id}
+                          onClick={() => approve(r.id)}
+                        >
+                          Approve
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          disabled={actingId === r.id}
+                          onClick={() => reject(r.id)}
+                        >
+                          Reject
+                        </Button>
+                      </>
+                    )}
                   </div>
-                )}
+                ) : null}
               </Card>
             </li>
           ))}
