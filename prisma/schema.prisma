@@ -116,6 +116,7 @@ model WalletTransaction {
   balanceAfter  Int
   description   String
   reference     String
+  metadata      Json?
   createdAt     DateTime @default(now())
 
   @@index([institutionId, createdAt])
@@ -150,6 +151,7 @@ model FundSession {
   provider             String
   transactionReference String?
   checkoutUrl          String?
+  payerDetails         Json?
 }
 
 model IdempotencyKey {
@@ -169,6 +171,17 @@ model MonnifyWebhookReceipt {
   dedupeKey  String   @unique
   eventType  String
   createdAt  DateTime @default(now())
+}
+
+model MonnifyWebhookLog {
+  id        String   @id
+  eventType String
+  dedupeKey String?
+  duplicate Boolean  @default(false)
+  payload   Json
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
 }
 
 model Notification {

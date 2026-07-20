@@ -1,4 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { buildPlatformTransactionDetail } from './transaction-detail.builder';
 import {
   InstitutionRepository,
   ReportRepository,
@@ -224,6 +225,170 @@ export class PlatformAdminService {
       page: safePage,
       totalPages,
       limit: pageSize,
+    };
+  }
+
+  async listTransactions(page = 1, limit = 25, type?: string) {
+    const pageSize = Math.min(Math.max(limit, 1), 100);
+    const pageNum = Math.max(page, 1);
+    const skip = (pageNum - 1) * pageSize;
+
+    const where = {
+      institutionId: { not: PLATFORM_INTERNAL_INSTITUTION_ID },
+      ...(type?.trim() ? { type: type.trim() } : {}),
+    };
+
+    const [rows, total] = await Promise.all([
+      this.prisma.walletTransaction.findMany({
+        where,
+        include: {
+          institution: { select: { id: true, name: true, email: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: pageSize,
+      }),
+      this.prisma.walletTransaction.count({ where }),
+    ]);
+
+    const totalPages = Math.max(1, Math.ceil(total / pageSize));
+    const safePage = Math.min(pageNum, totalPages);
+
+    return {
+      items: rows.map((row) => ({
+        id: row.id,
+        institutionId: row.institutionId,
+        institutionName: row.institution.name,
+        institutionEmail: row.institution.email,
+        type: row.type,
+        amount: row.amount,
+        balanceBefore: row.balanceAfter - row.amount,
+        balanceAfter: row.balanceAfter,
+        description: row.description,
+        reference: row.reference,
+        createdAt: row.createdAt.toISOString(),
+      })),
+      total,
+      page: safePage,
+      totalPages,
+      limit: pageSize,
+    };
+  }
+
+  async getTransaction(id: string) {
+    const row = await this.prisma.walletTransaction.findUnique({
+      where: { id },
+      include: {
+        institution: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            walletBalance: true,
+          },
+        },
+      },
+    });
+    if (!row || row.institutionId === PLATFORM_INTERNAL_INSTITUTION_ID) {
+      throw new NotFoundException('Transaction not found.');
+    }
+
+    let fundSession = null;
+    if (row.type === 'funding') {
+      const fundReference =
+        (row.metadata as { funding?: { fundReference?: string } } | null)
+          ?.funding?.fundReference ??
+        row.description.match(/·\s*(FND-[A-Z0-9]+-[A-Z0-9]+)/i)?.[1] ??
+        (/^FND-/i.test(row.reference) ? row.reference : null);
+      if (fundReference) {
+        fundSession = await this.prisma.fundSession.findFirst({
+          where: { reference: fundReference },
+        });
+      }
+    }
+
+    let verification = null;
+    if (row.type === 'verification_charge') {
+      const verRef =
+        (row.metadata as { verification?: { reference?: string } } | null)
+          ?.verification?.reference ??
+        row.description.match(/(VER-[A-Z0-9]+(?:-[A-Z0-9]+)?)/i)?.[1];
+      if (verRef) {
+        verification = await this.prisma.verification.findFirst({
+          where: {
+            institutionId: row.institutionId,
+            reference: verRef,
+          },
+        });
+      }
+      if (!verification) {
+        verification = await this.prisma.verification.findFirst({
+          where: {
+            institutionId: row.institutionId,
+            amountCharged: Math.abs(row.amount),
+            createdAt: {
+              gte: new Date(row.createdAt.getTime() - 2 * 60 * 1000),
+              lte: new Date(row.createdAt.getTime() + 2 * 60 * 1000),
+            },
+          },
+          orderBy: { createdAt: 'desc' },
+        });
+      }
+    }
+
+    return buildPlatformTransactionDetail({
+      row,
+      fundSession,
+      verification,
+    });
+  }
+
+  async listWebhookLogs(page = 1, limit = 25) {
+    const pageSize = Math.min(Math.max(limit, 1), 100);
+    const pageNum = Math.max(page, 1);
+    const skip = (pageNum - 1) * pageSize;
+
+    const [rows, total] = await Promise.all([
+      this.prisma.monnifyWebhookLog.findMany({
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: pageSize,
+      }),
+      this.prisma.monnifyWebhookLog.count(),
+    ]);
+
+    const totalPages = Math.max(1, Math.ceil(total / pageSize));
+    const safePage = Math.min(pageNum, totalPages);
+
+    return {
+      items: rows.map((row) => ({
+        id: row.id,
+        eventType: row.eventType,
+        dedupeKey: row.dedupeKey,
+        duplicate: row.duplicate,
+        createdAt: row.createdAt.toISOString(),
+      })),
+      total,
+      page: safePage,
+      totalPages,
+      limit: pageSize,
+    };
+  }
+
+  async getWebhookLog(id: string) {
+    const row = await this.prisma.monnifyWebhookLog.findUnique({
+      where: { id },
+    });
+    if (!row) {
+      throw new NotFoundException('Webhook log not found.');
+    }
+    return {
+      id: row.id,
+      eventType: row.eventType,
+      dedupeKey: row.dedupeKey,
+      duplicate: row.duplicate,
+      payload: row.payload,
+      createdAt: row.createdAt.toISOString(),
     };
   }
 }

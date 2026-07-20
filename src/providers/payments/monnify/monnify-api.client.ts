@@ -227,7 +227,28 @@ export class MonnifyApiClient {
     return timingSafeEqual(expected, received);
   }
 
-  /** Legacy Monnify hash: SHA512(secret + JSON body). Kept as fallback only. */
+  /** Legacy Monnify hash: SHA512(secretKey + raw request body). */
+  verifyWebhookSignatureLegacyRaw(
+    rawBody: string | Buffer,
+    signatureHeader: string | undefined,
+  ): boolean {
+    if (!signatureHeader?.trim()) return false;
+    const secretKey = this.config.get<string>('payments.monnify.secretKey');
+    if (!secretKey?.trim()) return false;
+
+    const body =
+      typeof rawBody === 'string' ? rawBody : rawBody.toString('utf8');
+    const computed = createHash('sha512')
+      .update(`${secretKey.trim()}${body}`)
+      .digest('hex');
+
+    const expected = Buffer.from(computed, 'utf8');
+    const received = Buffer.from(signatureHeader.trim(), 'utf8');
+    if (expected.length !== received.length) return false;
+    return timingSafeEqual(expected, received);
+  }
+
+  /** Legacy fallback when body was re-parsed (key order may differ). */
   verifyWebhookSignatureLegacy(
     body: Record<string, unknown>,
     signatureHeader: string | undefined,
@@ -254,6 +275,11 @@ export class MonnifyApiClient {
   }
 
   shouldRequireWebhookSignature(): boolean {
+    const override = this.config.get<boolean>(
+      'payments.monnify.webhookRequireSignature',
+    );
+    if (override === true) return true;
+    if (override === false) return false;
     if (this.isSandboxEnvironment()) return false;
     return (this.config.get<string>('nodeEnv') ?? 'development') === 'production';
   }

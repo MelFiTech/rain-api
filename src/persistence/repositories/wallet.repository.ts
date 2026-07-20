@@ -62,6 +62,15 @@ export class WalletRepository {
     return row ? toFundSession(row) : null;
   }
 
+  async findFundSessionByReference(
+    reference: string,
+  ): Promise<FundSessionEntity | null> {
+    const row = await this.prisma.fundSession.findFirst({
+      where: { reference },
+    });
+    return row ? toFundSession(row) : null;
+  }
+
   async findFundSessionByTransactionReference(
     transactionReference: string,
   ): Promise<FundSessionEntity | null> {

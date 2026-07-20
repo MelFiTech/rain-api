@@ -34,4 +34,38 @@ export class PlatformAdminController {
       limit ? Number(limit) : 10,
     );
   }
+
+  @Get('transactions')
+  listTransactions(
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('type') type?: string,
+  ) {
+    return this.admin.listTransactions(
+      page ? Number(page) : 1,
+      limit ? Number(limit) : 25,
+      type,
+    );
+  }
+
+  @Get('transactions/:id')
+  getTransaction(@Param('id') id: string) {
+    return this.admin.getTransaction(id);
+  }
+
+  @Get('webhook-logs')
+  listWebhookLogs(
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.admin.listWebhookLogs(
+      page ? Number(page) : 1,
+      limit ? Number(limit) : 25,
+    );
+  }
+
+  @Get('webhook-logs/:id')
+  getWebhookLog(@Param('id') id: string) {
+    return this.admin.getWebhookLog(id);
+  }
 }

@@ -1,6 +1,11 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { generateReference as genRef } from '../../common/utils/ids';
-import type { FundSessionEntity } from '../../domain/types';
+import type {
+  FundSessionEntity,
+  IdentifierType,
+  VerificationResult,
+  WalletTransactionMetadata,
+} from '../../domain/types';
 import { MonnifyApiError } from '../../providers/payments/monnify/monnify-api.client';
 import { PAYMENT_PROVIDER } from '../../providers/payments/interfaces/payment-provider.interface';
 import type { PaymentProvider } from '../../providers/payments/interfaces/payment-provider.interface';
@@ -42,16 +47,42 @@ export class WalletService {
     };
   }
 
-  async chargeVerification(institutionId: string, amount: number) {
+  async chargeVerification(
+    institutionId: string,
+    amount: number,
+    context?: {
+      reference: string;
+      maskedIdentifier: string;
+      identifierType: string;
+      result: string;
+    },
+  ) {
     const institution = await this.institutions.findById(institutionId);
     if (!institution) throw new Error('Institution not found');
 
+    const feeAmount = Math.abs(amount);
+    const metadata: WalletTransactionMetadata = {
+      flow: 'outflow',
+      verification: context
+        ? {
+            reference: context.reference,
+            maskedIdentifier: context.maskedIdentifier,
+            identifierType: context.identifierType as IdentifierType,
+            result: context.result as VerificationResult,
+            feeAmount,
+          }
+        : undefined,
+    };
+
     const updated = await this.institutions.adjustWalletBalance(institutionId, -amount, {
       type: 'verification_charge',
-      amount: -Math.abs(amount),
+      amount: -feeAmount,
       balanceAfter: institution.walletBalance - amount,
-      description: 'User verification',
+      description: context
+        ? `Verification ${context.reference} · ${context.maskedIdentifier}`
+        : 'User verification',
       reference: genRef('CHG'),
+      metadata,
       createdAt: new Date().toISOString(),
     });
 
@@ -63,6 +94,7 @@ export class WalletService {
     amount: number,
     type: 'funding' | 'reward_credit' | 'adjustment',
     description: string,
+    metadata?: WalletTransactionMetadata,
   ) {
     const institution = await this.institutions.findById(institutionId);
     if (!institution) throw new Error('Institution not found');
@@ -73,6 +105,18 @@ export class WalletService {
       balanceAfter: institution.walletBalance + amount,
       description,
       reference: genRef(type === 'funding' ? 'FND' : 'RWD'),
+      metadata: metadata ?? {
+        flow: 'inflow',
+        ...(type === 'reward_credit'
+          ? {
+              earning: {
+                kind: 'wallet_withdrawal' as const,
+                withdrawalReference: description.match(/·\s*(ewd_[a-z0-9]+)/i)?.[1],
+                amount: Math.abs(amount),
+              },
+            }
+          : {}),
+      },
       createdAt: new Date().toISOString(),
     });
   }
@@ -178,7 +222,23 @@ export class WalletService {
       session.institutionId,
       session.creditAmount,
       'funding',
-      `Wallet funding via Monnify · ${session.accountNumber} · ${session.reference}`,
+      `Wallet funding via Monnify · ${session.reference}`,
+      {
+        flow: 'inflow',
+        funding: {
+          fundSessionId: session.id,
+          fundReference: session.reference,
+          creditAmount: session.creditAmount,
+          fee: session.fee,
+          transferAmount: session.amount,
+          destination: {
+            bankName: session.bankName,
+            accountNumber: session.accountNumber,
+            accountName: session.accountName,
+          },
+          sender: session.payerDetails,
+        },
+      },
     );
     return true;
   }

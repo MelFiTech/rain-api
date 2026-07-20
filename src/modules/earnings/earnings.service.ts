@@ -161,6 +161,14 @@ export class EarningsService {
         amount,
         'reward_credit',
         `Earnings withdrawal to wallet · ${reference}`,
+        {
+          flow: 'inflow',
+          earning: {
+            kind: 'wallet_withdrawal',
+            withdrawalReference: reference,
+            amount,
+          },
+        },
       );
       await this.notifications.add(
         institutionId,

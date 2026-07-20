@@ -19,9 +19,19 @@ export default () => ({
       walletRedirectUrl:
         process.env.MONNIFY_WALLET_REDIRECT_URL ?? 'http://localhost:3000/wallet',
       walletAccountNumber: process.env.MONNIFY_WALLET_ACCOUNT_NUMBER ?? '',
-      webhookEnforceIp:
-        (process.env.MONNIFY_WEBHOOK_ENFORCE_IP ?? 'false').toLowerCase() ===
-        'true',
+      webhookEnforceIp: (() => {
+        const raw = process.env.MONNIFY_WEBHOOK_ENFORCE_IP?.trim().toLowerCase();
+        if (raw === 'true') return true;
+        if (raw === 'false') return false;
+        return (process.env.NODE_ENV ?? 'development') === 'production';
+      })(),
+      webhookRequireSignature: (() => {
+        const raw =
+          process.env.MONNIFY_WEBHOOK_REQUIRE_SIGNATURE?.trim().toLowerCase();
+        if (raw === 'true') return true;
+        if (raw === 'false') return false;
+        return undefined;
+      })(),
       webhookAllowedIps: (
         process.env.MONNIFY_WEBHOOK_ALLOWED_IPS ?? '35.242.133.146'
       )

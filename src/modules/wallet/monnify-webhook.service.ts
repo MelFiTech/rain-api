@@ -1,13 +1,17 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { Prisma } from '@prisma/client';
 import { generateId } from '../../common/utils/ids';
+import { extractMonnifyPayerFromEventData } from '../../common/utils/monnify-payer';
 import { MonnifyApiClient } from '../../providers/payments/monnify/monnify-api.client';
+import { PrismaService } from '../../prisma/prisma.service';
 import {
   EarningsRepository,
   WalletRepository,
 } from '../../persistence';
 import { EarningsService } from '../earnings/earnings.service';
 import { WalletService } from './wallet.service';
+import { WalletRealtimeService } from './wallet-realtime.service';
 
 export interface MonnifyWebhookPayload {
   eventType?: string;
@@ -22,9 +26,11 @@ export class MonnifyWebhookService {
     private readonly earningsRepo: EarningsRepository,
     private readonly walletRepo: WalletRepository,
     private readonly wallet: WalletService,
+    private readonly walletRealtime: WalletRealtimeService,
     private readonly earnings: EarningsService,
     private readonly monnify: MonnifyApiClient,
     private readonly config: ConfigService,
+    private readonly prisma: PrismaService,
   ) {}
 
   assertAllowedSourceIp(clientIp: string | undefined) {
@@ -48,20 +54,33 @@ export class MonnifyWebhookService {
     signature: string | undefined,
     parsedBody: Record<string, unknown>,
   ): boolean {
-    if (rawBody && signature) {
+    const requireSignature = this.monnify.shouldRequireWebhookSignature();
+
+    if (signature?.trim() && rawBody?.length) {
       if (this.monnify.verifyWebhookSignature(rawBody, signature)) {
         return true;
       }
-      if (this.monnify.verifyWebhookSignatureLegacy(parsedBody, signature)) {
-        this.logger.warn('Monnify webhook matched legacy hash format.');
+      if (this.monnify.verifyWebhookSignatureLegacyRaw(rawBody, signature)) {
         return true;
       }
+      if (this.monnify.verifyWebhookSignatureLegacy(parsedBody, signature)) {
+        this.logger.warn(
+          'Monnify webhook matched legacy hash from parsed JSON (prefer raw body).',
+        );
+        return true;
+      }
+      this.logger.warn('Monnify webhook signature did not match');
       return false;
     }
 
-    if (!signature && !this.monnify.shouldRequireWebhookSignature()) {
+    if (signature?.trim() && !rawBody?.length) {
+      this.logger.warn('Monnify webhook missing raw body for signature check');
+      return false;
+    }
+
+    if (!signature?.trim() && !requireSignature) {
       this.logger.debug(
-        'Monnify webhook accepted without signature (sandbox / non-production).',
+        'Monnify webhook accepted without signature (sandbox / optional mode).',
       );
       return true;
     }
@@ -76,6 +95,7 @@ export class MonnifyWebhookService {
     const dedupeKey = this.buildDedupeKey(eventType, eventData);
     if (!dedupeKey) {
       this.logger.warn(`Monnify webhook ${eventType} missing dedupe key`);
+      await this.recordWebhookLog(payload, eventType, null, false);
       return;
     }
 
@@ -84,6 +104,9 @@ export class MonnifyWebhookService {
       dedupeKey,
       eventType: eventType || 'UNKNOWN',
     });
+
+    await this.recordWebhookLog(payload, eventType, dedupeKey, !claimed);
+
     if (!claimed) {
       this.logger.debug(`Duplicate Monnify webhook ignored: ${dedupeKey}`);
       return;
@@ -147,10 +170,20 @@ export class MonnifyWebhookService {
 
     if (session.status !== 'paid') {
       session.status = 'paid';
-      await this.walletRepo.saveFundSession(session);
     }
 
+    const payerDetails = extractMonnifyPayerFromEventData(eventData);
+    if (payerDetails) {
+      session.payerDetails = payerDetails;
+    }
+
+    await this.walletRepo.saveFundSession(session);
+
     await this.wallet.applyFundSessionPayment(session.id);
+    this.walletRealtime.notifyFundSessionPaid(
+      session.institutionId,
+      session.id,
+    );
   }
 
   private async handleDisbursement(
@@ -168,5 +201,29 @@ export class MonnifyWebhookService {
         eventData.transactionDescription ?? '',
       ),
     });
+  }
+
+  private async recordWebhookLog(
+    payload: MonnifyWebhookPayload,
+    eventType: string,
+    dedupeKey: string | null,
+    duplicate: boolean,
+  ) {
+    try {
+      await this.prisma.monnifyWebhookLog.create({
+        data: {
+          id: generateId('mwl'),
+          eventType: eventType || 'UNKNOWN',
+          dedupeKey,
+          duplicate,
+          payload: payload as unknown as Prisma.InputJsonValue,
+        },
+      });
+    } catch (error) {
+      this.logger.error(
+        'Failed to persist Monnify webhook log',
+        error instanceof Error ? error.stack : String(error),
+      );
+    }
   }
 }

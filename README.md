@@ -22,7 +22,9 @@ cd admin-ui && npm install && cd ..
 cp .env.example .env
 ```
 
-Set at minimum: `DATABASE_URL`, `JWT_SECRET`, and Monnify sandbox keys if you need wallet funding or payouts.
+For **Railway production**, use `.env.prod.example` as a checklist, copy values into `.env.prod` (gitignored), then paste into Railway → Variables. See `.env.prod.example` and the Monnify section below.
+
+Set at minimum: `DATABASE_URL`, `JWT_SECRET`, and Monnify sandbox keys (`MONNIFY_API_KEY`, `MONNIFY_SECRET_KEY`, `MONNIFY_CONTRACT_CODE`, `MONNIFY_WALLET_ACCOUNT_NUMBER` for payouts). See `.env.example` for every variable (webhooks, fees, email, earnings worker).
 
 3. Create the schema and seed demo data.
 
@@ -105,6 +107,33 @@ admin-ui/        Vite React platform admin (basename /admin)
 public/admin/    Built admin static files (generated)
 ```
 
-## Monnify (wallet top-ups)
+## Monnify
 
-Sandbox credentials go in `.env` (`MONNIFY_*`). Wallet funding fee and pricing live in app config (seeded; adjustable via platform config API). For webhooks, point Monnify to `POST /webhooks/monnify` on your public API URL when you deploy.
+Sandbox credentials go in `.env` (`MONNIFY_*`). Wallet funding fee and pricing live in app config (seeded; adjustable via platform config API).
+
+### Webhook URL (Monnify Developer → Webhook URLs)
+
+Use the same HTTPS URL for each field that applies:
+
+```text
+https://rain-api-production.up.railway.app/webhooks/monnify
+```
+
+| Monnify field | Used for |
+|---------------|----------|
+| Transaction completion | Wallet funding (`SUCCESSFUL_TRANSACTION`) |
+| Disbursement | Earnings bank payouts |
+| Refund / settlement | Logged; extend handlers if needed |
+
+The API responds with **HTTP 200** immediately, then processes the event asynchronously. Duplicate notifications are ignored via a dedupe store.
+
+### Webhook security (env)
+
+| Variable | Purpose |
+|----------|---------|
+| `MONNIFY_SECRET_KEY` | HMAC-SHA512 verification of `monnify-signature` (production/live) |
+| `MONNIFY_WEBHOOK_ALLOWED_IPS` | Default `35.242.133.146` (Monnify) |
+| `MONNIFY_WEBHOOK_ENFORCE_IP` | `true` in production by default; set `false` for sandbox testing |
+| `MONNIFY_WEBHOOK_REQUIRE_SIGNATURE` | Optional; sandbox webhooks often have no signature header |
+
+Sandbox: signatures are usually omitted; keep `MONNIFY_BASE_URL` on sandbox and `MONNIFY_WEBHOOK_ENFORCE_IP=false` if needed. Live Monnify: use live keys, enforce IP, signatures required automatically when not on sandbox.

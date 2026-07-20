@@ -229,6 +229,50 @@ export interface ReportEntity {
   signalKey: string;
 }
 
+export interface MonnifyPayerDetails {
+  customerName?: string;
+  customerEmail?: string;
+  paymentMethod?: string;
+  amountPaid?: number;
+  paidOn?: string;
+  transactionReference?: string;
+  sources?: Array<{
+    accountName?: string;
+    accountNumber?: string;
+    bankCode?: string;
+    amountPaid?: number;
+  }>;
+}
+
+export interface WalletTransactionMetadata {
+  flow?: 'inflow' | 'outflow';
+  funding?: {
+    fundSessionId?: string;
+    fundReference?: string;
+    creditAmount: number;
+    fee: number;
+    transferAmount: number;
+    destination?: {
+      bankName: string;
+      accountNumber: string;
+      accountName: string;
+    };
+    sender?: MonnifyPayerDetails;
+  };
+  verification?: {
+    reference: string;
+    maskedIdentifier: string;
+    identifierType: IdentifierType;
+    result: VerificationResult;
+    feeAmount: number;
+  };
+  earning?: {
+    kind: 'wallet_withdrawal' | 'adjustment';
+    withdrawalReference?: string;
+    amount: number;
+  };
+}
+
 export interface WalletTransactionEntity {
   id: string;
   institutionId: string;
@@ -237,6 +281,7 @@ export interface WalletTransactionEntity {
   balanceAfter: number;
   description: string;
   reference: string;
+  metadata?: WalletTransactionMetadata;
   createdAt: string;
 }
 
@@ -268,4 +313,5 @@ export interface FundSessionEntity {
   provider: string;
   transactionReference?: string;
   checkoutUrl?: string;
+  payerDetails?: MonnifyPayerDetails;
 }

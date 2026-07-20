@@ -221,6 +221,9 @@ export function toWalletTxn(row: PrismaWalletTxn): WalletTransactionEntity {
     balanceAfter: row.balanceAfter,
     description: row.description,
     reference: row.reference,
+    metadata: row.metadata
+      ? (row.metadata as WalletTransactionEntity['metadata'])
+      : undefined,
     createdAt: iso(row.createdAt),
   };
 }
@@ -275,6 +278,9 @@ export function toFundSession(row: PrismaFundSession): FundSessionEntity {
     provider: row.provider,
     transactionReference: row.transactionReference ?? undefined,
     checkoutUrl: row.checkoutUrl ?? undefined,
+    payerDetails: row.payerDetails
+      ? (row.payerDetails as FundSessionEntity['payerDetails'])
+      : undefined,
   };
 }
 
@@ -294,6 +300,9 @@ export function fundSessionToPrisma(entity: FundSessionEntity) {
     provider: entity.provider,
     transactionReference: entity.transactionReference ?? null,
     checkoutUrl: entity.checkoutUrl ?? null,
+    payerDetails: entity.payerDetails
+      ? (entity.payerDetails as Prisma.InputJsonValue)
+      : undefined,
   };
 }
 

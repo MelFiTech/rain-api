@@ -7,15 +7,11 @@ import {
   Query,
 } from '@nestjs/common';
 import { CurrentInstitution } from '../../common/decorators/auth.decorators';
+import { bankCodeForName } from '../../common/nigerian-banks';
+import { PlatformVerifyBodyDto } from '../../common/validation/identifier';
 import type { InstitutionEntity } from '../../domain/types';
 import { toPlatformVerification } from './verifications.mapper';
 import { VerificationsService } from './verifications.service';
-
-class PlatformVerifyDto {
-  identifierType!: string;
-  identifier!: string;
-  bankCode?: string;
-}
 
 @Controller('platform/verifications')
 export class PlatformVerificationsController {
@@ -24,30 +20,27 @@ export class PlatformVerificationsController {
   @Post('verify')
   async verify(
     @CurrentInstitution() institution: InstitutionEntity,
-    @Body() body: PlatformVerifyDto,
+    @Body() body: PlatformVerifyBodyDto,
   ) {
-    if (!body.identifier?.trim()) {
-      return { status: 'error', message: 'Identifier is required.' };
-    }
-    if (body.identifierType === 'account_number' && !body.bankCode?.trim()) {
+    const bankRef = body.bankCode?.trim();
+    if (body.identifierType === 'account_number' && !bankRef) {
       return {
         status: 'error',
         message: 'Please select a bank for account number verification.',
       };
     }
 
-    const identifierType = body.identifierType as
-      | 'account_number'
-      | 'phone'
-      | 'email'
-      | 'bvn'
-      | 'nin';
+    const bankCode =
+      body.identifierType === 'account_number' && bankRef
+        ? bankCodeForName(bankRef) ?? bankRef
+        : undefined;
 
     try {
       const record = await this.verifications.create(institution, {
-        identifierType,
+        identifierType: body.identifierType,
         identifier: body.identifier,
         email: 'platform@internal.rain',
+        bankCode,
       });
       return { status: 'success', data: toPlatformVerification(record) };
     } catch (error) {

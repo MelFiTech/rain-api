@@ -7,6 +7,9 @@ import { InstitutionDetailPage } from "@/pages/InstitutionDetailPage";
 import { InstitutionsPage } from "@/pages/InstitutionsPage";
 import { LoginPage } from "@/pages/LoginPage";
 import { WithdrawalsPage } from "@/pages/WithdrawalsPage";
+import { TransactionsPage } from "@/pages/TransactionsPage";
+import { WebhookLogsPage } from "@/pages/WebhookLogsPage";
+import { WebhookLogDetailPage } from "@/pages/WebhookLogDetailPage";
 
 export default function App() {
   return (
@@ -24,6 +27,16 @@ export default function App() {
                 element={<InstitutionDetailPage />}
               />
               <Route path="withdrawals" element={<WithdrawalsPage />} />
+              <Route path="transactions" element={<TransactionsPage />} />
+              <Route
+                path="transactions/:id"
+                element={<Navigate to="/transactions" replace />}
+              />
+              <Route path="webhook-logs" element={<WebhookLogsPage />} />
+              <Route
+                path="webhook-logs/:id"
+                element={<WebhookLogDetailPage />}
+              />
               <Route
                 path="access-requests"
                 element={<Navigate to="../institutions?tab=requests" replace />}

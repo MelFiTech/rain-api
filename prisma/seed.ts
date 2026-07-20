@@ -27,6 +27,9 @@ const DEFAULT_NOTIFICATION_PREFERENCES = {
 
 const prisma = new PrismaClient();
 
+/** Minimum wallet balance for seeded customer institutions (₦). */
+const MIN_CUSTOMER_WALLET_BALANCE = 5000;
+
 const JWT_SECRET =
   process.env.JWT_SECRET ?? 'rain-dev-jwt-secret-change-me';
 
@@ -230,7 +233,7 @@ async function main() {
       name: input.name,
       email: input.email,
       contactName: input.contactName,
-      walletBalance: input.walletBalance,
+      walletBalance: Math.max(MIN_CUSTOMER_WALLET_BALANCE, input.walletBalance),
       lowBalanceThreshold: LOW_BALANCE_THRESHOLD,
       ...keys,
       apiKeyCreatedAt: createdAt,
@@ -340,7 +343,7 @@ async function main() {
       id: demo.id,
       name: demo.name,
       email: demo.email,
-      walletBalance: demo.balance,
+      walletBalance: Math.max(MIN_CUSTOMER_WALLET_BALANCE, demo.balance),
       apiKeySuffix: `${slug}_key`,
       contactName: demo.contact,
       user: {
@@ -607,8 +610,16 @@ async function main() {
     });
   }
 
+  const toppedUp = await prisma.institution.updateMany({
+    where: {
+      id: { not: RAIN_PLATFORM_INSTITUTION_ID },
+      walletBalance: { lt: MIN_CUSTOMER_WALLET_BALANCE },
+    },
+    data: { walletBalance: MIN_CUSTOMER_WALLET_BALANCE },
+  });
+
   console.log(
-    'Seed complete: platform admin, PayNest + peer + Liongate + SureTrust, access requests, verifications, withdrawals.',
+    `Seed complete: platform admin, PayNest + peer + Liongate + SureTrust, access requests, verifications, withdrawals.${toppedUp.count > 0 ? ` Topped up ${toppedUp.count} wallet(s) to ₦${MIN_CUSTOMER_WALLET_BALANCE.toLocaleString()}.` : ''}`,
   );
 }
 

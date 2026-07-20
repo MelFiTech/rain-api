@@ -7,24 +7,11 @@ import {
   Query,
 } from '@nestjs/common';
 import { CurrentInstitution } from '../../common/decorators/auth.decorators';
-import type { InstitutionEntity, ReportCategory } from '../../domain/types';
 import { resolvePrimaryReportIdentifier } from '../../common/utils/report-identifier';
+import { SubmitPlatformReportDto } from '../../common/validation/platform-report.dto';
+import type { InstitutionEntity } from '../../domain/types';
 import { toPlatformReport } from './reports.mapper';
 import { ReportsService } from './reports.service';
-
-class SubmitReportDto {
-  fullName?: string;
-  bank?: string;
-  accountNumber?: string;
-  phone?: string;
-  email?: string;
-  bvn?: string;
-  nin?: string;
-  category!: ReportCategory;
-  description!: string;
-  incidentDate!: string;
-  amountInvolved?: number;
-}
 
 @Controller('platform/reports')
 export class PlatformReportsController {
@@ -33,7 +20,7 @@ export class PlatformReportsController {
   @Post()
   async submit(
     @CurrentInstitution() institution: InstitutionEntity,
-    @Body() body: SubmitReportDto,
+    @Body() body: SubmitPlatformReportDto,
   ) {
     const fieldErrors: Record<string, string> = {};
     const primary = resolvePrimaryReportIdentifier(body);

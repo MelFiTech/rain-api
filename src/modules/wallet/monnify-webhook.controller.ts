@@ -1,6 +1,7 @@
 import {
   Controller,
   Headers,
+  HttpCode,
   Logger,
   Post,
   Req,
@@ -21,6 +22,7 @@ export class MonnifyWebhookController {
 
   @Public()
   @Post()
+  @HttpCode(200)
   handle(
     @Req() req: RawBodyRequest<Request>,
     @Headers('monnify-signature') signature?: string,

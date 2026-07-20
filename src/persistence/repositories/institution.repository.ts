@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { generateId } from '../../common/utils/ids';
 import type {
   InstitutionEntity,
@@ -65,6 +66,9 @@ export class InstitutionRepository {
           balanceAfter: updated.walletBalance,
           description: txn.description,
           reference: txn.reference,
+          metadata: txn.metadata
+            ? (txn.metadata as Prisma.InputJsonValue)
+            : undefined,
           createdAt: new Date(txn.createdAt),
         },
       });

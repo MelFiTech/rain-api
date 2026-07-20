@@ -1,6 +1,7 @@
 import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { NestExpressApplication } from '@nestjs/platform-express';
+import { IoAdapter } from '@nestjs/platform-socket.io';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { existsSync } from 'fs';
 import { join } from 'path';
@@ -23,10 +24,12 @@ async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     rawBody: true,
   });
+  app.set('trust proxy', 1);
   app.enableCors({
     origin: true,
     credentials: true,
   });
+  app.useWebSocketAdapter(new IoAdapter(app));
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,

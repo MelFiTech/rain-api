@@ -1,9 +1,11 @@
 import { cn } from "@/lib/utils";
 import {
+  ArrowRightLeft,
   Building2,
   Landmark,
   LayoutDashboard,
   PanelLeft,
+  Webhook,
   X,
 } from "lucide-react";
 import { NavLink } from "react-router-dom";
@@ -12,7 +14,9 @@ import { RainMark } from "@/components/ui/primitives";
 const NAV_ITEMS = [
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { to: "/institutions", label: "Institutions", icon: Building2 },
+  { to: "/transactions", label: "Transactions", icon: ArrowRightLeft },
   { to: "/withdrawals", label: "Withdrawals", icon: Landmark },
+  { to: "/webhook-logs", label: "Webhook logs", icon: Webhook },
 ];
 
 interface SidebarProps {

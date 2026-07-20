@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { generateId, generateReference } from '../../common/utils/ids';
+import { normalizeIdentifier } from '../../common/validation/identifier';
 import { buildSignalKey } from '../../common/utils/signal-key';
 import {
   maskAccountNumber,
@@ -59,7 +60,11 @@ export class ReportsService {
       }
     }
 
-    const signalKey = buildSignalKey(input.identifierType, input.identifier);
+    const normalizedIdentifier = normalizeIdentifier(
+      input.identifierType,
+      input.identifier,
+    );
+    const signalKey = buildSignalKey(input.identifierType, normalizedIdentifier);
     const signal = await this.reports.getNetworkSignal(signalKey);
     const sourceCount = signal?.sourceCount ?? 1;
 
@@ -68,7 +73,10 @@ export class ReportsService {
       institutionId: institution.id,
       reference: generateReference('RPT'),
       identifierType: input.identifierType,
-      maskedIdentifier: maskIdentifier(input.identifierType, input.identifier),
+      maskedIdentifier: maskIdentifier(
+        input.identifierType,
+        normalizedIdentifier,
+      ),
       maskedEmail: maskEmail(input.email),
       maskedPhone: input.phone ? maskPhone(input.phone) : undefined,
       maskedAccountNumber: input.accountNumber

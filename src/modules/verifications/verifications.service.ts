@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { buildApiConfidence } from '../../common/utils/confidence';
 import { generateId, generateReference } from '../../common/utils/ids';
+import { normalizeIdentifier } from '../../common/validation/identifier';
 import { maskIdentifier } from '../../common/utils/masking';
 import { buildSignalKey } from '../../common/utils/signal-key';
 import type {
@@ -71,7 +72,11 @@ export class VerificationsService {
       throw error;
     }
 
-    const signalKey = buildSignalKey(input.identifierType, input.identifier);
+    const normalizedIdentifier = normalizeIdentifier(
+      input.identifierType,
+      input.identifier,
+    );
+    const signalKey = buildSignalKey(input.identifierType, normalizedIdentifier);
     const signal = await this.reports.getNetworkSignal(signalKey);
     const reportsForSignal = await this.reports.listBySignalKey(signalKey);
 
@@ -85,13 +90,20 @@ export class VerificationsService {
       categories = signal.categories as ReportCategory[];
     }
 
-    await this.wallet.chargeVerification(institution.id, verificationCost);
+    const masked = maskIdentifier(input.identifierType, normalizedIdentifier);
+    const verificationReference = generateReference('VER');
 
-    const masked = maskIdentifier(input.identifierType, input.identifier);
+    await this.wallet.chargeVerification(institution.id, verificationCost, {
+      reference: verificationReference,
+      maskedIdentifier: masked,
+      identifierType: input.identifierType,
+      result,
+    });
+
     const entity: VerificationEntity = {
       id: generateId('ver'),
       institutionId: institution.id,
-      reference: generateReference('VER'),
+      reference: verificationReference,
       identifierType: input.identifierType,
       maskedIdentifier: masked,
       result,

@@ -8,6 +8,9 @@ function getPageTitle(pathname: string): string {
   if (pathname.startsWith("/institutions/") && pathname !== "/institutions") {
     return "Institution";
   }
+  if (pathname.startsWith("/webhook-logs/") && pathname !== "/webhook-logs") {
+    return "Webhook log";
+  }
   const match = NAV_ITEMS.find(
     (item) =>
       pathname === item.to || pathname.startsWith(`${item.to}/`),

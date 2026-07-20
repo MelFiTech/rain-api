@@ -109,6 +109,21 @@ body {
   animation: fade-in 0.25s ease-out;
 }
 
+@keyframes drawer-in {
+  from {
+    opacity: 0;
+    transform: translateX(32px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.animate-drawer-in {
+  animation: drawer-in 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
 .no-scrollbar::-webkit-scrollbar {
   display: none;
 }
