@@ -1,6 +1,6 @@
 import type { ConfidenceInfo, ConfidenceLevel } from '../../domain/types';
 
-function levelFromCount(sourceCount: number): ConfidenceLevel {
+export function levelFromCount(sourceCount: number): ConfidenceLevel {
   if (sourceCount >= 10) return 'very_high';
   if (sourceCount >= 5) return 'high';
   if (sourceCount >= 2) return 'medium';
@@ -49,6 +49,6 @@ export function buildPlatformConfidence(sourceCount: number): {
     level,
     independentSourceCount: sourceCount,
     label: labelWord,
-    description: `${labelWord} confidence — reported by ${institutions}.`,
+    description: `${labelWord} confidence, reported by ${institutions}.`,
   };
 }

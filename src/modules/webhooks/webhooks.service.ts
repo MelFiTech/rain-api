@@ -5,6 +5,7 @@ import type {
   VerificationEntity,
   WebhookEventType,
 } from '../../domain/types';
+import { buildVerificationRecommendation } from '../../common/utils/recommendation';
 import { WEBHOOK_DELIVERY_PROVIDER } from '../../providers/webhooks/interfaces/webhook-delivery.interface';
 import type { WebhookDeliveryProvider } from '../../providers/webhooks/interfaces/webhook-delivery.interface';
 import { WebhookRepository } from '../../persistence';
@@ -32,6 +33,19 @@ export class WebhooksService {
               verification.confidence.independent_source_count,
           }
         : null,
+      recommendation: (() => {
+        const r = buildVerificationRecommendation({
+          result: verification.result,
+          sourceCount: verification.independentSourceCount,
+          categories: verification.categories,
+        });
+        return {
+          action: r.action,
+          severity: r.severity,
+          title: r.title,
+          summary: r.summary,
+        };
+      })(),
     });
   }
 

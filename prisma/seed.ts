@@ -6,8 +6,9 @@ import {
 } from '../src/common/constants';
 import { buildApiConfidence } from '../src/common/utils/confidence';
 import { generateId, generateReference } from '../src/common/utils/ids';
-import { maskBvnOrNin, maskEmail } from '../src/common/utils/masking';
+import { maskBvnOrNin, maskEmail, maskIdentifier } from '../src/common/utils/masking';
 import { buildSignalKey } from '../src/common/utils/signal-key';
+import type { IdentifierType, ReportCategory } from '../src/domain/types';
 import { encryptApiKey } from '../src/common/crypto/api-key-cipher';
 import {
   institutionToPrisma,
@@ -29,6 +30,22 @@ const prisma = new PrismaClient();
 
 /** Minimum wallet balance for seeded customer institutions (₦). */
 const MIN_CUSTOMER_WALLET_BALANCE = 5000;
+
+/**
+ * Run a verification with these identifiers after `npm run db:seed` to get network matches.
+ * (Reports are spread across institutions — not only PayNest.)
+ */
+export const SEED_DEMO_VERIFICATIONS = {
+  bvnStrongMatch: { identifierType: 'bvn' as const, identifier: '12345678901' },
+  bvnHighAlert: { identifierType: 'bvn' as const, identifier: '77665544332' },
+  bvnCriticalAlert: { identifierType: 'bvn' as const, identifier: '99887766554' },
+  ninCriticalAlert: { identifierType: 'nin' as const, identifier: '55667788990' },
+  phoneMatch: { identifierType: 'phone' as const, identifier: '08081234567' },
+  emailMatch: { identifierType: 'email' as const, identifier: 'scam@example.com' },
+  accountMatch: { identifierType: 'account_number' as const, identifier: '0123456789' },
+  bvnPeerMatch: { identifierType: 'bvn' as const, identifier: '22222222222' },
+  noMatchNin: { identifierType: 'nin' as const, identifier: '11111111111' },
+} as const;
 
 const JWT_SECRET =
   process.env.JWT_SECRET ?? 'rain-dev-jwt-secret-change-me';
@@ -174,9 +191,9 @@ async function main() {
 
   const peerSignal = buildSignalKey('bvn', '22222222222');
   const peerReport = {
-    id: generateId('rpt'),
+    id: 'rpt_demo_peer_bvn',
     institutionId: peerInstitution.id,
-    reference: generateReference('RPT'),
+    reference: 'RPT-DEMO-PEER-BVN',
     identifierType: 'bvn' as const,
     maskedIdentifier: maskBvnOrNin('22222222222'),
     maskedEmail: maskEmail('peer@demopeer.ng'),
@@ -201,6 +218,62 @@ async function main() {
       submittedAt: peerReport.submittedAt.toISOString(),
     }),
   });
+
+  async function seedNetworkReport(input: {
+    id: string;
+    institutionId: string;
+    reference: string;
+    identifierType: IdentifierType;
+    identifier: string;
+    category: ReportCategory;
+    description: string;
+    incidentDate: string;
+    daysAgo: number;
+    maskedEmail?: string;
+  }) {
+    const submittedAt = new Date();
+    submittedAt.setDate(submittedAt.getDate() - input.daysAgo);
+    const signalKey = buildSignalKey(input.identifierType, input.identifier);
+    const maskedIdentifier = maskIdentifier(
+      input.identifierType,
+      input.identifier,
+    );
+    await prisma.report.upsert({
+      where: { id: input.id },
+      create: reportToPrisma({
+        id: input.id,
+        institutionId: input.institutionId,
+        reference: input.reference,
+        identifierType: input.identifierType,
+        maskedIdentifier,
+        maskedEmail: input.maskedEmail,
+        category: input.category,
+        description: input.description,
+        incidentDate: input.incidentDate,
+        independentSourceCount: 1,
+        confidence: buildApiConfidence(1),
+        earningsGenerated: 0,
+        submittedAt: submittedAt.toISOString(),
+        signalKey,
+      }),
+      update: reportToPrisma({
+        id: input.id,
+        institutionId: input.institutionId,
+        reference: input.reference,
+        identifierType: input.identifierType,
+        maskedIdentifier,
+        maskedEmail: input.maskedEmail,
+        category: input.category,
+        description: input.description,
+        incidentDate: input.incidentDate,
+        independentSourceCount: 1,
+        confidence: buildApiConfidence(1),
+        earningsGenerated: 0,
+        submittedAt: submittedAt.toISOString(),
+        signalKey,
+      }),
+    });
+  }
 
   async function seedInstitution(input: {
     id: string;
@@ -356,6 +429,210 @@ async function main() {
     });
   }
 
+  /** Cross-institution reports so sample verifications return network matches. */
+  const demoNetworkReports: Parameters<typeof seedNetworkReport>[0][] = [
+    {
+      id: 'rpt_demo_bvn_liongate',
+      institutionId: 'inst_liongate',
+      reference: 'RPT-DEMO-BVN-LG',
+      identifierType: 'bvn',
+      identifier: SEED_DEMO_VERIFICATIONS.bvnStrongMatch.identifier,
+      category: 'loan_fraud',
+      description: 'Seeded demo: suspected loan fraud on shared BVN signal.',
+      incidentDate: '2026-05-10',
+      daysAgo: 12,
+    },
+    {
+      id: 'rpt_demo_bvn_suretrust',
+      institutionId: 'inst_suretrust',
+      reference: 'RPT-DEMO-BVN-ST',
+      identifierType: 'bvn',
+      identifier: SEED_DEMO_VERIFICATIONS.bvnStrongMatch.identifier,
+      category: 'fraud',
+      description: 'Seeded demo: fraud report from SureTrust on same BVN.',
+      incidentDate: '2026-05-18',
+      daysAgo: 9,
+    },
+    {
+      id: 'rpt_demo_bvn_bluesky',
+      institutionId: 'inst_bluesky',
+      reference: 'RPT-DEMO-BVN-BS',
+      identifierType: 'bvn',
+      identifier: SEED_DEMO_VERIFICATIONS.bvnStrongMatch.identifier,
+      category: 'identity_theft',
+      description: 'Seeded demo: identity theft flag on shared BVN.',
+      incidentDate: '2026-06-01',
+      daysAgo: 7,
+    },
+    {
+      id: 'rpt_demo_bvn_cedar',
+      institutionId: 'inst_cedar',
+      reference: 'RPT-DEMO-BVN-CEDAR',
+      identifierType: 'bvn',
+      identifier: SEED_DEMO_VERIFICATIONS.bvnPeerMatch.identifier,
+      category: 'scam',
+      description: 'Seeded demo: scam report matching Demo Peer BVN sample.',
+      incidentDate: '2026-04-20',
+      daysAgo: 15,
+    },
+    {
+      id: 'rpt_demo_phone_riverbank',
+      institutionId: 'inst_riverbank',
+      reference: 'RPT-DEMO-PH-RB',
+      identifierType: 'phone',
+      identifier: SEED_DEMO_VERIFICATIONS.phoneMatch.identifier,
+      category: 'scam',
+      description: 'Seeded demo: scam calls from this number.',
+      incidentDate: '2026-06-08',
+      daysAgo: 5,
+    },
+    {
+      id: 'rpt_demo_phone_goldline',
+      institutionId: 'inst_goldline',
+      reference: 'RPT-DEMO-PH-GL',
+      identifierType: 'phone',
+      identifier: SEED_DEMO_VERIFICATIONS.phoneMatch.identifier,
+      category: 'mule_account',
+      description: 'Seeded demo: mule recruitment via this phone.',
+      incidentDate: '2026-06-12',
+      daysAgo: 3,
+    },
+    {
+      id: 'rpt_demo_email_harbor',
+      institutionId: 'inst_harbor',
+      reference: 'RPT-DEMO-EM-HARBOR',
+      identifierType: 'email',
+      identifier: SEED_DEMO_VERIFICATIONS.emailMatch.identifier,
+      category: 'scam',
+      description: 'Seeded demo: phishing outreach from this email.',
+      incidentDate: '2026-05-25',
+      daysAgo: 10,
+      maskedEmail: maskEmail(SEED_DEMO_VERIFICATIONS.emailMatch.identifier),
+    },
+    {
+      id: 'rpt_demo_email_vertex',
+      institutionId: 'inst_vertex',
+      reference: 'RPT-DEMO-EM-VERTEX',
+      identifierType: 'email',
+      identifier: SEED_DEMO_VERIFICATIONS.emailMatch.identifier,
+      category: 'scam',
+      description: 'Seeded demo: advance-fee scam contact email.',
+      incidentDate: '2026-06-02',
+      daysAgo: 6,
+      maskedEmail: maskEmail(SEED_DEMO_VERIFICATIONS.emailMatch.identifier),
+    },
+    {
+      id: 'rpt_demo_acct_northgate',
+      institutionId: 'inst_northgate',
+      reference: 'RPT-DEMO-AC-NG',
+      identifierType: 'account_number',
+      identifier: SEED_DEMO_VERIFICATIONS.accountMatch.identifier,
+      category: 'chargeback_abuse',
+      description: 'Seeded demo: chargeback abuse on this account number.',
+      incidentDate: '2026-05-30',
+      daysAgo: 8,
+    },
+    {
+      id: 'rpt_demo_acct_palmcredit',
+      institutionId: 'inst_palmcredit',
+      reference: 'RPT-DEMO-AC-PALM',
+      identifierType: 'account_number',
+      identifier: SEED_DEMO_VERIFICATIONS.accountMatch.identifier,
+      category: 'suspicious_transaction',
+      description: 'Seeded demo: suspicious inflows to this account.',
+      incidentDate: '2026-06-10',
+      daysAgo: 2,
+    },
+  ];
+
+  const alertCategories: ReportCategory[] = [
+    'fraud',
+    'mule_account',
+    'loan_fraud',
+    'identity_theft',
+    'chargeback_abuse',
+  ];
+
+  function alertReportsForInstitutions(input: {
+    idPrefix: string;
+    refPrefix: string;
+    identifierType: IdentifierType;
+    identifier: string;
+    institutionIds: string[];
+    daysAgoStart: number;
+  }): Parameters<typeof seedNetworkReport>[0][] {
+    return input.institutionIds.map((institutionId, index) => ({
+      id: `${input.idPrefix}_${index + 1}`,
+      institutionId,
+      reference: `${input.refPrefix}-${index + 1}`,
+      identifierType: input.identifierType,
+      identifier: input.identifier,
+      category: alertCategories[index % alertCategories.length]!,
+      description: `Seeded high-alert network report (${index + 1}/${input.institutionIds.length}).`,
+      incidentDate: '2026-06-14',
+      daysAgo: input.daysAgoStart + (index % 4),
+    }));
+  }
+
+  demoNetworkReports.push(
+    ...alertReportsForInstitutions({
+      idPrefix: 'rpt_demo_high_bvn',
+      refPrefix: 'RPT-DEMO-HIGH-BVN',
+      identifierType: 'bvn',
+      identifier: SEED_DEMO_VERIFICATIONS.bvnHighAlert.identifier,
+      institutionIds: [
+        'inst_summit',
+        'inst_meadow',
+        'inst_ironwood',
+        'inst_clearfund',
+        'inst_stonebridge',
+      ],
+      daysAgoStart: 4,
+    }),
+    ...alertReportsForInstitutions({
+      idPrefix: 'rpt_demo_crit_bvn',
+      refPrefix: 'RPT-DEMO-CRIT-BVN',
+      identifierType: 'bvn',
+      identifier: SEED_DEMO_VERIFICATIONS.bvnCriticalAlert.identifier,
+      institutionIds: [
+        'inst_liongate',
+        'inst_suretrust',
+        'inst_bluesky',
+        'inst_cedar',
+        'inst_riverbank',
+        'inst_goldline',
+        'inst_harbor',
+        'inst_vertex',
+        'inst_northgate',
+        'inst_palmcredit',
+      ],
+      daysAgoStart: 2,
+    }),
+    ...alertReportsForInstitutions({
+      idPrefix: 'rpt_demo_crit_nin',
+      refPrefix: 'RPT-DEMO-CRIT-NIN',
+      identifierType: 'nin',
+      identifier: SEED_DEMO_VERIFICATIONS.ninCriticalAlert.identifier,
+      institutionIds: [
+        'inst_aurora',
+        'inst_bluesky',
+        'inst_harbor',
+        'inst_summit',
+        'inst_vertex',
+        'inst_meadow',
+        'inst_cedar',
+        'inst_ironwood',
+        'inst_northgate',
+        'inst_clearfund',
+      ],
+      daysAgoStart: 1,
+    }),
+  );
+
+  for (const row of demoNetworkReports) {
+    await seedNetworkReport(row);
+  }
+
   const paynestVerifications = [
     { ref: 'VER-1001', type: 'bvn' as const, masked: maskBvnOrNin('12345678901'), result: 'match' as const, daysAgo: 1 },
     { ref: 'VER-1002', type: 'phone' as const, masked: '0803 ••• ••89', result: 'no_match' as const, daysAgo: 2 },
@@ -398,48 +675,33 @@ async function main() {
   }
 
   const paynestReports = [
-    { category: 'scam' as const, signal: '90123456789', daysAgo: 4 },
-    { category: 'mule_account' as const, signal: '8087654321', daysAgo: 6 },
+    {
+      id: 'rpt_paynest_seed_1',
+      ref: 'RPT-PAYNEST-SEED-1',
+      category: 'scam' as const,
+      identifier: '08087654321',
+      daysAgo: 4,
+    },
+    {
+      id: 'rpt_paynest_seed_2',
+      ref: 'RPT-PAYNEST-SEED-2',
+      category: 'mule_account' as const,
+      identifier: '08091234567',
+      daysAgo: 6,
+    },
   ];
 
-  for (const [i, r] of paynestReports.entries()) {
-    const id = `rpt_paynest_seed_${i + 1}`;
-    const ref = `RPT-PAYNEST-SEED-${i + 1}`;
-    const submittedAt = new Date();
-    submittedAt.setDate(submittedAt.getDate() - r.daysAgo);
-    const signalKey = buildSignalKey('phone', r.signal);
-    await prisma.report.upsert({
-      where: { id },
-      create: reportToPrisma({
-        id,
-        institutionId: institution.id,
-        reference: ref,
-        identifierType: 'phone',
-        maskedIdentifier: `080${r.signal.slice(0, 3)} ••• ${r.signal.slice(-2)}`,
-        category: r.category,
-        description: `Seeded ${r.category} report for admin demo.`,
-        incidentDate: '2026-06-15',
-        independentSourceCount: 1,
-        confidence: buildApiConfidence(1),
-        earningsGenerated: 25,
-        submittedAt: submittedAt.toISOString(),
-        signalKey,
-      }),
-      update: reportToPrisma({
-        id,
-        institutionId: institution.id,
-        reference: ref,
-        identifierType: 'phone',
-        maskedIdentifier: `080${r.signal.slice(0, 3)} ••• ${r.signal.slice(-2)}`,
-        category: r.category,
-        description: `Seeded ${r.category} report for admin demo.`,
-        incidentDate: '2026-06-15',
-        independentSourceCount: 1,
-        confidence: buildApiConfidence(1),
-        earningsGenerated: 25,
-        submittedAt: submittedAt.toISOString(),
-        signalKey,
-      }),
+  for (const r of paynestReports) {
+    await seedNetworkReport({
+      id: r.id,
+      institutionId: institution.id,
+      reference: r.ref,
+      identifierType: 'phone',
+      identifier: r.identifier,
+      category: r.category,
+      description: `Seeded ${r.category} report (PayNest local feed).`,
+      incidentDate: '2026-06-15',
+      daysAgo: r.daysAgo,
     });
   }
 
@@ -621,6 +883,12 @@ async function main() {
   console.log(
     `Seed complete: platform admin, PayNest + peer + Liongate + SureTrust, access requests, verifications, withdrawals.${toppedUp.count > 0 ? ` Topped up ${toppedUp.count} wallet(s) to ₦${MIN_CUSTOMER_WALLET_BALANCE.toLocaleString()}.` : ''}`,
   );
+  console.log('\nDemo verification identifiers (expect result: match unless noted):');
+  for (const [name, sample] of Object.entries(SEED_DEMO_VERIFICATIONS)) {
+    console.log(
+      `  ${name}: ${sample.identifierType} = ${sample.identifier}${name === 'noMatchNin' ? ' (no_match)' : ''}`,
+    );
+  }
 }
 
 main()
